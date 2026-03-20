@@ -1,300 +1,484 @@
 # Arquitectura y Stack Tecnológico: Red-Nómada
 
-## 📐 Visión General
+## 🎯 Principios de Selección
 
-Red-Nómada es un sistema **offline-first** que permite nómadas digitales compartir estado técnico de espacios en tiempo real, minimizando batería y tráfico de red.
-
-**Principios:**
-- Datos locales primero (SQLite) → Sincronización eventual
-- Sin GPS en background / Sin push obligatorio
-- Permisos explícitos: "siempre", "una vez", "solo en uso"
-- Validación solo en foreground
-
----
-
-## 🏗 Capas Arquitectónicas
-
-```
-┌─────────────────────────────────┐
-│   Frontend (React Native)        │
-│  📸 Snapshot | ⏰ Alerts | 🎮 Missions
-└────────────┬────────────────────┘
-             │ (HTTP REST + WebSocket)
-┌────────────┴────────────────────┐
-│   Backend (Node.js + Express)    │
-│  • Places API                    │
-│  • Verification Agent            │
-│  • Gamification Logic            │
-└────────────┬────────────────────┘
-             │ (SQL + Cache)
-┌────────────┴────────────────────┐
-│   Data Layer                     │
-│  • PostgreSQL (persistencia)     │
-│  • Redis (cache + real-time)     │
-│  • SQLite (local en app)         │
-└─────────────────────────────────┘
-```
+Todas las decisiones tecnológicas se basan en:
+1. **The Snapshot (<5s):** Renderizado rápido desde cache local
+2. **Autonomía Local:** Funciona offline con SQLite + sincronización eventual
+3. **Conectividad Intermitente:** No asume internet constante
+4. **Batería Limitada:** Sin GPS background, validación solo en foreground
+5. **MVP Rápido:** Stack unificado (JavaScript/TypeScript)
 
 ---
 
-## 📱 Frontend (React Native)
+## 📱 FRONTEND: Mobile-First (React Native)
 
-### Stack
-- **Framework:** React Native (Expo o bare)
-- **Estado Local:** SQLite (offline-first)
-- **Sincronización:** Redux Saga + Axios
-- **Ubicación:** expo-location (con granularidad de permisos)
-- **UI:** React Native Paper / NativeBase
+### Justificación
+- **Nómadas digitales:** Uso mayoritario desde móviles en cafés/coworking
+- **Offline-first:** SQLite local para cache, funciona sin conexión
+- **Validación pasiva:** WebSocket para alertas cuando app está abierta
+- **Bajo consumo:** No requiere background services
 
-### Componentes Clave
+### Tecnologías Exactas
 
-**PlaceDetailCard (Historia 1: Snapshot)**
-- Renderizar 3 pilares: Conectividad | Energía | Ambiente
-- Cada pilar: 3 valores únicamente (Baja/Media/Alta, etc.)
-- **SLA:** Latencia <500ms (desde cache local)
-- ✅ Prohibición: Cero estrellas, cero notas generales
+| Componente | Tecnología | Versión | Justificación |
+|---|---|---|---|
+| **Lenguaje** | TypeScript | 5.3+ | Tipado estricto, error prevention |
+| **Framework Mobile** | React Native | 0.73+ | iOS/Android unificado, comunidad activa |
+| **Bundler** | Expo** | 50.0+ | Simplifica build & deployment (aún permite eject si crece) |
+| **State Manager** | Redux Toolkit | 1.9+ | Cache local persistente, offline sync |
+| **Local DB** | SQLite (expo-sqlite) | 12.0+ | Relativamente persistencia local, queries rápidas |
+| **HTTP Client** | Axios + Retry | 1.6+ | Request queue offline, reintento automático |
+| **WebSocket** | Socket.io-client | 4.5+ | Real-time validations pasivas, fallback HTTP |
+| **Location** | Expo Location | 16.0+ | Gestión granular de permisos (always/while/never) |
+| **UI Library** | React Native Paper | 5.11+ | Material Design, componentes accesibles |
+| **Sync Engine** | WatermelonDB | 0.28+ | Local-first sync, offline + online reconciliation |
 
-**VerificationAlert (Historia 2)**
-- Modal que aparece **solo si app en foreground**
-- Detectar localmente: `lastVerified > 2 horas`
-- Mensaje: *"¿Sigue tranquilo este café?"* (1 tap confirm)
-- No triggers: sin GPS background, sin push externa
+### Estructura de Directorios
 
-**MissionsWidget (Historia 3)**
-- Lista de retos activos: "Reportá 3 cafés hoy"
-- Badge de impacto: *"Gracias a tu reporte, 12 personas evitaron..."*
-
-### Flujo de Permisos (Historia 2)
 ```
-App Launch
-  ├─ Mostrar picker: "Ubicación: siempre / una vez / solo en uso"
-  ├─ Store en SQLite + enviar a backend
-  ├─ Always → Verificaciones pasivas continuas
-  ├─ While Using → Solo si app activa
-  └─ Never → Ocultar features de ubicación
-```
-
----
-
-## 🖥 Backend (Node.js + Express)
-
-### Stack
-- **Runtime:** Node.js 20+
-- **Framework:** Express.js
-- **ORM:** Sequelize o TypeORM
-- **Validación:** Joi
-- **WebSocket:** Socket.io
-- **Scheduler:** node-cron
-
-### Services
-
-**Places Service**
-```
-GET    /api/places/:id           → Snapshot actual
-POST   /api/places               → Crear lugar
-GET    /api/places?lat&lon&r=    → Buscar cercanos
-```
-
-**Verification Service (Historia 2)**
-```
-POST   /api/validations/:placeId → Confirmar estado
-GET    /api/places/:id/status    → Flag: "Verificación AHORA"
-```
-
-**Gamification Service (Historia 3)**
-```
-GET    /api/missions             → Misiones activas
-POST   /api/missions/:id/complete → +puntos
-GET    /api/user/impact          → {"peopleSaved": 12}
-```
-
-**Permission Service**
-```
-POST   /api/permissions          → Guardar preferencia (Always/While/Never)
-GET    /api/permissions/:userId  → Validar scope
-```
-
-### Lógica: Verification Agent
-- **Cron:** cada 10 min
-- Busca lugares con `lastVerified > 2 horas`
-- Selecciona 3-5 usuarios con permiso = "Always" o "WhileUsing"
-- Envía evento WebSocket a app (solo si foreground)
-- App muestra modal → confirma → POST validación
-
-### Lógica: Impacto Social (Historia 3)
-- POST validación → calcular: ¿Cuántos consultaron este lugar en 24h?
-- Almacenar en tabla `user_impact` (auditoría)
-- Retornar: `{"peopleSaved": 12}`
-- App renderiza overlay: *"Gracias a tu reporte, 12 personas..."*
-
----
-
-## 💾 Base de Datos
-
-### PostgreSQL
-
-```sql
--- Lugares
-CREATE TABLE places (
-  id UUID PRIMARY KEY,
-  name VARCHAR(255),
-  latitude DECIMAL(10,8),
-  longitude DECIMAL(10,8),
-  last_verified TIMESTAMP,
-  connectivity VARCHAR(20),  -- Baja/Media/Alta
-  energy VARCHAR(20),        -- Pocos/Suficientes/Muchos
-  environment VARCHAR(20),   -- Silencioso/Moderado/Ruidoso
-  created_at TIMESTAMP
-);
-
--- Validaciones
-CREATE TABLE validations (
-  id UUID PRIMARY KEY,
-  place_id UUID REFERENCES places,
-  user_id UUID,
-  connectivity VARCHAR(20),
-  energy VARCHAR(20),
-  environment VARCHAR(20),
-  created_at TIMESTAMP
-);
-
--- Usuarios
-CREATE TABLE users (
-  id UUID PRIMARY KEY,
-  username VARCHAR(255) UNIQUE,
-  location_permission VARCHAR(20), -- Always/WhileUsing/Never
-  points INT,
-  created_at TIMESTAMP
-);
-
--- Misiones
-CREATE TABLE missions (
-  id UUID PRIMARY KEY,
-  user_id UUID REFERENCES users,
-  title VARCHAR(255),  -- "Reportá 3 cafés hoy"
-  target INT,
-  current INT,
-  completed BOOLEAN,
-  reward_points INT,
-  created_at TIMESTAMP
-);
-
--- Impacto (auditoría)
-CREATE TABLE user_impact (
-  id UUID PRIMARY KEY,
-  user_id UUID REFERENCES users,
-  validation_id UUID REFERENCES validations,
-  people_saved INT,
-  created_at TIMESTAMP
-);
-```
-
-### SQLite (Local en App)
-- Replica de `places` (snapshot actual + metadata)
-- Cache local de validaciones propias
-- Índice por `lastVerified` para detectar datos obsoletos
-
-### Redis (Cache + Real-time)
-- `place:{placeId}` → snapshot (TTL 2h)
-- `verification:pending:{userId}` → alertas pendientes
-- WebSocket channel para eventos de validación
-
----
-
-## 🔄 Flujos Críticos
-
-**Flujo 1: Ver Snapshot (Historia 1)**
-```
-Usuario abre lugar
-  ├─ Consultar SQLite local (offline OK)
-  ├─ Si no existe: GET /api/places/:id
-  ├─ Cache en SQLite
-  └─ Renderizar 3 pilares en <500ms
-```
-
-**Flujo 2: Re-validación Pasiva (Historia 2)**
-```
-1. App listener: detecta lugar con lastVerified > 2h en SQLite
-2. Backend cron: identifica validaciones pendientes
-3. WebSocket event → App muestra modal (solo foreground)
-4. Usuario tap → POST /api/validations/:placeId
-5. Backend actualiza + calcula impacto
-6. Retorna: {"peopleSaved": 12}
-7. App muestra badge/overlay
-```
-
-**Flujo 3: Misión Completada (Historia 3)**
-```
-Usuario completa validación
-  ├─ POST /api/validations/:placeId
-  ├─ Backend: GET impacto_count (quién consultó en 24h)
-  ├─ POST /api/missions/:id/complete (+puntos)
-  ├─ Retorna: {"peopleSaved": 12, "pointsAwarded": 50}
-  └─ App muestra: "Gracias a tu reporte, 12 personas evitaron..."
+red-nomada-mobile/
+├── app/
+│   ├── screens/
+│   │   ├── PlacesScreen.tsx       (Historia 1: Snapshot)
+│   │   ├── PlaceDetailModal.tsx   (The 3 pillars)
+│   │   ├── VerificationModal.tsx  (Historia 2: 1-tap validation)
+│   │   ├── MissionsScreen.tsx     (Historia 3: Gamification)
+│   │   └── PermissionsScreen.tsx  (Location perms: always/while/never)
+│   ├── components/
+│   │   ├── PillarIcon.tsx         (Connectivity/Energy/Environment)
+│   │   ├── UrgentBanner.tsx       ("Este lugar necesita verificación AHORA")
+│   │   ├── ImpactMessage.tsx      ("Gracias, 12 personas evitaron...")
+│   │   └── LocationPermissionModal.tsx
+│   ├── store/
+│   │   ├── slices/
+│   │   │   ├── placesSlice.ts
+│   │   │   ├── validationsSlice.ts
+│   │   │   ├── missionsSlice.ts
+│   │   │   └── userSlice.ts
+│   │   └── store.ts
+│   ├── db/
+│   │   ├── schema.ts              (WatermelonDB schema)
+│   │   └── sync.ts                (Sync logic)
+│   ├── services/
+│   │   ├── api.ts                 (Axios + queue)
+│   │   ├── location.ts            (Expo Location manager)
+│   │   ├── socket.ts              (Socket.io-client instance)
+│   │   └── permissions.ts
+│   └── hooks/
+│       ├── useNearbyPlaces.ts
+│       ├── usePlaceSnapshot.ts
+│       ├── useValidationTrigger.ts
+│       └── useImpactMessage.ts
+├── app.json                        (Expo config)
+├── package.json
+└── tsconfig.json
 ```
 
 ---
 
-## 🛡 Restricciones Mapeadas
+## 🖥️ BACKEND: Node.js + Express
 
-| Restricción | Implementación |
-|---|---|
-| **Snapshot <5s** | Cache local SQLite + <500ms render |
-| **No GPS background** | Listener solo en foreground |
-| **Batería limitada** | Permisos granulares Always/While/Never |
-| **Sin internet** | SQLite offline-first + sync eventual |
-| **Sin push obligatorio** | WebSocket para validaciones (app abierta) |
-| **Datos obsoletos >2h** | Flag: "Este lugar necesita verificación AHORA" |
+### Justificación
+- **Stack unificado:** JavaScript/TypeScript frontend + backend
+- **Escalabilidad:** Express + Bull para cron jobs (distribuir validaciones)
+- **Real-time:** Socket.io para WebSocket (validaciones pasivas)
+- **Rápido MVP:** Excelente ecosistema npm
+
+### Tecnologías Exactas
+
+| Componente | Tecnología | Versión | Justificación |
+|---|---|---|---|
+| **Lenguaje** | TypeScript | 5.3+ | Type safety |
+| **Runtime** | Node.js | 20 LTS | Soporte largo plazo |
+| **Framework** | Express | 4.18+ | Minimalista, rápido |
+| **Base de Datos** | PostgreSQL | 15+ | Relaciones complejas (Users, Validations, Missions, UserImpact) |
+| **ORM** | Prisma | 5.7+ | Type-safe queries, migrations automáticas |
+| **Real-time** | Socket.io | 4.5+ | WebSocket + fallback, broadcast validations |
+| **Job Queue** | Bull | 4.11+ | Cron: detectar >2h obsoletos, distribuir validaciones |
+| **Authentication** | JWT (jsonwebtoken) | 9.1+ | Stateless, scalable |
+| **Validation** | Zod | 3.22+ | Runtime schema validation |
+| **Logging** | Pino | 8.16+ | Structured logs, performance |
+| **Testing** | Jest | 29.7+ | Unit + integration tests |
+
+### Estructura de Directorios
+
+```
+red-nomada-api/
+├── src/
+│   ├── controllers/
+│   │   ├── placesController.ts    (GET /places/:id, POST /places, GET /places/nearby)
+│   │   ├── validationsController.ts (POST /validations, GET /places/:id/status)
+│   │   ├── permissionsController.ts (POST/GET /permissions)
+│   │   ├── missionsController.ts  (GET, POST)
+│   │   └── usersController.ts
+│   ├── services/
+│   │   ├── placeService.ts
+│   │   ├── validationService.ts   (Calcular people_saved)
+│   │   ├── missionService.ts
+│   │   ├── impactService.ts
+│   │   └── locationService.ts
+│   ├── routes/
+│   │   ├── places.ts
+│   │   ├── validations.ts
+│   │   ├── permissions.ts
+│   │   ├── missions.ts
+│   │   └── users.ts
+│   ├── middleware/
+│   │   ├── auth.ts                (JWT verification)
+│   │   ├── errorHandler.ts
+│   │   └── validateInput.ts       (Zod schemas)
+│   ├── db/
+│   │   ├── prisma.client.ts       (Singleton instance)
+│   │   └── migrations/            (Prisma migrations)
+│   ├── jobs/
+│   │   ├── checkObsoleteData.ts   (Cron: >2h without validation)
+│   │   ├── distributionValidations.ts (Round-robin: max 3-5/user/day)
+│   │   └── queue.ts               (Bull instance)
+│   ├── socket/
+│   │   ├── handlers.ts            (Socket.io event handlers)
+│   │   └── events.ts              (Event definitions)
+│   ├── schemas/
+│   │   ├── places.ts              (Zod validation schemas)
+│   │   ├── validations.ts
+│   │   ├── permissions.ts
+│   │   └── missions.ts
+│   ├── types/
+│   │   └── index.ts               (TypeScript types)
+│   ├── utils/
+│   │   ├── jwt.ts
+│   │   ├── geolocation.ts         (Distance calculation)
+│   │   └── cache.ts               (In-memory cache layer)
+│   ├── app.ts                     (Express setup)
+│   └── index.ts                   (Server entry point)
+├── prisma/
+│   ├── schema.prisma              (Data model)
+│   └── migrations/
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── fixtures/
+├── .env.example
+├── docker-compose.yml             (PostgreSQL local dev)
+├── package.json
+├── tsconfig.json
+└── jest.config.js
+```
 
 ---
 
-## 📦 Dependencias
+## 🗄️ BASE DE DATOS: PostgreSQL
 
-### Frontend
-- `react-native` / `expo`
-- `@react-navigation/native`
-- `react-native-sqlite-storage`
-- `redux` + `redux-saga`
-- `axios`
-- `expo-location`
-- `socket.io-client`
+### Justificación
+- **Relaciones complejas:** Foreign keys (Users → Validations, Places → UserImpact)
+- **Escalabilidad:** Indices GIS para búsqueda geo (nearby places)
+- **ACID:** Transacciones para inconsistencias (ej: impact calculation)
+- **Replicación:** Backup automático (importante para datos comunitarios)
 
-### Backend
-- `express`
-- `pg` (PostgreSQL)
-- `redis`
-- `joi`
-- `socket.io`
-- `node-cron`
-- `sequelize`
+### Esquema (Prisma)
 
-### Infrastructure
-- PostgreSQL 14+
-- Redis 7+
-- Node.js 20 LTS
+```prisma
+// User Location Permission Enum
+enum LocationPermission {
+  ALWAYS
+  WHILE_USING
+  NEVER
+}
+
+// User
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String   @unique
+  
+  locationPermission LocationPermission @default(WHILE_USING)
+  points      Int      @default(0)
+  
+  // Relations
+  validations Validation[]
+  missions    Mission[]
+  userImpacts UserImpact[]
+  createdPlaces Place[] @relation("CreatedBy")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Place
+model Place {
+  id          String   @id @default(cuid())
+  name        String
+  
+  // Geolocation
+  latitude    Decimal  @db.Decimal(10, 8)
+  longitude   Decimal  @db.Decimal(10, 8)
+  
+  // Los 3 pilares técnicos (Story 1)
+  connectivity String  // 'baja' | 'media' | 'alta'
+  energy       String  // 'pocos' | 'suficientes' | 'muchos'
+  environment  String  // 'silencioso' | 'moderado' | 'ruidoso'
+  
+  // Story 2: Urgencia (>2 horas sin validación)
+  lastVerified DateTime?
+  verificationCount Int @default(0)
+  
+  createdBy   String
+  createdByUser User @relation("CreatedBy", fields: [createdBy], references: [id])
+  
+  // Relations
+  validations Validation[]
+  userImpacts UserImpact[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([latitude, longitude])  // GIS: búsqueda nearby
+  @@index([lastVerified])         // Detectar >2h obsoletos
+}
+
+// Validation (Story 2 & 3)
+model Validation {
+  id          String   @id @default(cuid())
+  
+  placeId     String
+  place       Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Valores confirmados
+  connectivity String
+  energy       String
+  environment  String
+  
+  // Relation: Impact
+  userImpact  UserImpact?
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([placeId, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Mission (Story 3)
+model Mission {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String   // "Reportá 3 cafés hoy"
+  description String?
+  target      Int      // Meta numérica
+  current     Int      @default(0)
+  completed   Boolean  @default(false)
+  
+  rewardPoints Int
+  
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  
+  @@index([userId, expiresAt])
+  @@index([completed])
+}
+
+// UserImpact (Story 3: "12 personas evitaron...")
+model UserImpact {
+  id          String   @id @default(cuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  validationId String @unique
+  validation  Validation @relation(fields: [validationId], references: [id], onDelete: Cascade)
+  
+  // Snapshot: cuántos consultaron este lugar en 24h
+  peopleSaved Int
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([validationId])
+}
+```
 
 ---
 
-## 🚀 Orden de Implementación (MVP)
+## 🚀 DEPLOYMENTS
 
-1. **Schema DB:** crear tablas en PostgreSQL
-2. **Backend minimal:** Places CRUD + /validations endpoint
-3. **Frontend UI:** PlaceDetailCard (Snapshot) con datos mock
-4. **Local sync:** SQLite + Redux
-5. **API integration:** GET /places/:id + cache
-6. **Verification:** Listener local + WebSocket alert modal
-7. **Gamification:** Missions engine + impact counter
-8. **Refinamiento:** Permisos, percolación de datos obsoletos, pruebas
+### Development
+
+```bash
+# Backend local
+docker-compose up  # PostgreSQL + Redis (para Bull job queue)
+npm run dev       # Express server http://localhost:3000
+
+# Mobile local
+expo start        # QR para escanear con Expo Go
+```
+
+### Production
+
+| Componente | Plataforma | Justificación |
+|---|---|---|
+| **Backend API** | Render / Railway | Node.js + PostgreSQL manejado, auto-scaling |
+| **Base de Datos** | PostgreSQL (Render/Railway) | Backups automáticos, replicación |
+| **Socket.io Scaling** | Adapter Redis (ioredis) | Broadcast entre múltiples servidores |
+| **Job Queue** | Bull + Node (en mismo server) | Cron jobs para obsolescence + distribution |
+| **Mobile App** | Expo EAS Build | CI/CD para iOS/Android, signed builds |
+| **App Distribution** | App Store / Google Play | Distribución oficial |
+
+### Configuración de Deployments (Resumen)
+
+```yaml
+# Backend (Render)
+- Runtime: Node.js 20
+- Build: npm install && npm run build
+- Start: npm run start
+- Env Vars: DATABASE_URL, JWT_SECRET, SOCKET_IO_ORIGIN
+
+# Mobile (Expo EAS)
+- Preview: eas build --platform all --profile preview
+- Production: eas build --platform all --profile production
+- Submission: eas submit --platform all
+```
 
 ---
 
-## ✅ Validación de Soluciones
+## 🔌 Integraciones Clave
 
-Toda solución debe cumplir:
-- ✓ Criterios de aceptación de cada historia
-- ✓ No asumir internet constante
-- ✓ Respetar "siempre/una vez/solo en uso"
-- ✓ Solo validar cuando app activa
-- ✓ Sin GPS background
-- ✓ Snapshot <5 segundos
-- ✓ Cero puntuaciones generales
+### Socket.io (Validación Pasiva - Story 2)
+
+```typescript
+// Backend: emit cuando app está en foreground + >2h sin validación
+io.to(`user:${userId}`).emit('validation:needed', {
+  placeId: uuid,
+  urgent: true,
+  message: 'Este lugar necesita verificación AHORA'
+});
+
+// Mobile: escucha solo cuando app está abierta (AppState listener)
+```
+
+### Bull Job Queue (Detectar Obsoletos + Distribuir)
+
+```typescript
+// Cada 30 minutos: detectar places >2 horas
+const checkObsoleteJob = new CronExpr('0 */30 * * * *', async () => {
+  const obsolete = await prisma.place.findMany({
+    where: {
+      lastVerified: {
+        lt: new Date(Date.now() - 2 * 60 * 60 * 1000) // >2h
+      }
+    }
+  });
+  
+  // Distribuir entre usuarios con permission=ALWAYS (equidad)
+  const usersToValidate = selectRoundRobin(obsolete.length);
+  
+  for (const { place, user } of usersToValidate) {
+    io.to(`user:${user.id}`).emit('validation:needed', {...});
+  }
+});
+```
+
+### Cálculo de Impacto (peopleSaved)
+
+```typescript
+// Inmediatamente después de POST /validations/:placeId
+const peopleSaved = await prisma.validation.count({
+  where: {
+    placeId: placeId,
+    createdAt: {
+      gte: new Date(Date.now() - 24 * 60 * 60 * 1000)
+    }
+  }
+});
+
+// Retornar al frontend + guardar en user_impact
+return {
+  success: true,
+  peopleSaved: peopleSaved,
+  message: `Gracias a tu reporte, ${peopleSaved} personas evitaron ir a un lugar lleno`
+};
+```
+
+---
+
+## ✅ Validación contra Restricciones
+
+| Restricción | Solución | Tecnología |
+|---|---|---|
+| **Snapshot <5s** | Cache local SQLite + API ultra-rápida | React Native + Expo SQLite + Node.js |
+| **3 pilares únicamente** | DB schema (connectivity, energy, environment) | Prisma enum validation |
+| **Datos >2h marcan "AHORA"** | `lastVerified` field + Bull cron + Socket.io | PostgreSQL + Bull + Socket.io |
+| **Validación pasiva (foreground)** | AppState listener (iOS/Android) + WebSocket | React Native AppState + Socket.io-client |
+| **Permisos explícitos** | Expo Location (always/while/never) + DB field | Expo + LocationPermission enum |
+| **Sin GPS background** | Validación solo cuando app abierta | AppState listener, no background tasks |
+| **Impacto visible** | Cálculo COUNT en validación + UI message | Prisma query + ImpactMessage component |
+| **Funciona offline** | SQLite local + sync eventual | WatermelonDB |
+| **Distribución equitativa** | Round-robin algorithm en Bull queue | Bull job + algoritmo |
+
+---
+
+## 📦 Dependencias Críticas del MVP
+
+### Backend (package.json)
+```json
+{
+  "dependencies": {
+    "express": "^4.18.2",
+    "prisma": "^5.7.0",
+    "@prisma/client": "^5.7.0",
+    "socket.io": "^4.5.4",
+    "bull": "^4.11.0",
+    "ioredis": "^5.3.2",
+    "jsonwebtoken": "^9.1.0",
+    "zod": "^3.22.4",
+    "pino": "^8.16.0",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "jest": "^29.7.0",
+    "@types/node": "^20.8.0"
+  }
+}
+```
+
+### Mobile (package.json)
+```json
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-native": "^0.73.0",
+    "expo": "^50.0.0",
+    "@react-navigation/native": "^6.1.8",
+    "redux": "^4.2.1",
+    "@reduxjs/toolkit": "^1.9.6",
+    "watermelondb": "^0.28.0",
+    "socket.io-client": "^4.5.4",
+    "axios": "^1.6.2",
+    "expo-location": "^16.0.0",
+    "zod": "^3.22.4",
+    "react-native-paper": "^5.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "@types/react": "^18.2.0"
+  }
+}
+```
+
+---
+
+## 🎯 Próximos Pasos Recomendados
+
+1. **Crear repositorio backend:** `red-nomada-api`
+2. **Crear repositorio mobile:** `red-nomada-mobile`
+3. **Setup PostgreSQL local:** Docker Compose
+4. **Implementar autenticación JWT:** Base para Story 1-3
+5. **Implementar endpoints de Places:** Story 1 (Snapshot)
+6. **Implementar Socket.io + Bull:** Story 2 (Validación pasiva)
+7. **Implementar Gamificación:** Story 3 (Misiones + Impacto)
+
