@@ -52,28 +52,31 @@ Todos los errores del API siguen esta estructura:
 
 ---
 
-## Manejo en Frontend
+## Manejo en Frontend (React Native)
 
 ### Estrategia por tipo de error
-- **401 (Token expirado):** Refresh automático transparente, reintentar request original
-- **401 (Refresh inválido):** Redirect a `/login`, limpiar estado
+- **401 (Token expirado):** Refresh automático transparente (interceptor Axios), reintentar request original
+- **401 (Refresh inválido):** Navegar a pantalla de Login, limpiar stores y expo-secure-store
 - **400 (Validación):** Mostrar error inline en el campo correspondiente
-- **403 (Prohibido):** Mostrar toast/snackbar con mensaje del servidor
+- **403 (Prohibido):** Mostrar toast/snackbar con mensaje del servidor (react-native-toast-message)
 - **404 (No encontrado):** Mostrar pantalla de "Lugar no encontrado"
 - **429 (Rate limit):** Mostrar toast con tiempo de espera
 - **500 (Error interno):** Mostrar mensaje genérico "Algo salió mal, intentá de nuevo"
 
 ### Errores de conectividad (offline)
-- Detectar `navigator.onLine` y errores de fetch
+- Detectar estado de red con `@react-native-community/netinfo`
 - Mostrar banner persistente: **"Sin conexión — mostrando datos guardados"**
-- Encolar reportes pendientes en IndexedDB para enviar cuando vuelva la conexión
+- Encolar reportes pendientes en AsyncStorage para enviar cuando vuelva la conexión
+- Listener de reconexión (`NetInfo.addEventListener`) para despachar cola
 - No intentar re-enviar automáticamente más de **3 veces**
 
 ---
 
-## Logging (Backend)
+## Logging (Backend — Spring Boot)
 
+- **Logger:** SLF4J + Logback (incluido en Spring Boot)
 - **Error 4xx:** log level `warn`, no alerta
 - **Error 5xx:** log level `error`, alerta a monitoring
-- Incluir en logs: `requestId`, `userId`, `endpoint`, `errorCode`, `timestamp`
+- **Manejo centralizado:** `@RestControllerAdvice` con `GlobalExceptionHandler`
+- Incluir en logs: `requestId` (MDC), `userId`, `endpoint`, `errorCode`, `timestamp`
 - **No loguear:** passwords, tokens, datos sensibles del usuario

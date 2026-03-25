@@ -171,7 +171,7 @@ Actualizar preferencia de ubicación. 🔒 Auth requerida
 
 | Código | Significado |
 |---|---|
-| 400 | Datos de entrada inválidos (validación Zod) |
+| 400 | Datos de entrada inválidos (Bean Validation / `@Valid`) |
 | 401 | Token ausente o expirado |
 | 403 | Acción no permitida (ej: validar propio reporte) |
 | 404 | Recurso no encontrado |

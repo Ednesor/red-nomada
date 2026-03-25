@@ -133,6 +133,10 @@ Lugar 1──N ConsultaLugar
 
 ## Notas de Implementación
 
-- **Frescura dinámica:** `es_fresco` no se almacena como campo real. Se calcula en queries comparando `created_at` (o la última `Validacion.created_at` asociada) contra `NOW() - INTERVAL '2 hours'`
-- **PostGIS:** Usar extensión para consultas de proximidad (`ST_DWithin` para encontrar lugares cercanos al usuario)
-- **Soft delete:** Los lugares se desactivan (`activo = false`), nunca se eliminan
+- **ORM:** Entidades mapeadas con JPA/Hibernate (`@Entity`, `@Table`, `@ManyToOne`, etc.)
+- **Migraciones:** Flyway con scripts SQL versionados en `db/migration/`
+- **Enums:** Mapear como `@Enumerated(EnumType.STRING)` en JPA para legibilidad en BD
+- **Frescura dinámica:** `es_fresco` no se almacena como campo real. Se calcula en queries JPQL/nativas comparando `created_at` (o la última `Validacion.created_at` asociada) contra `NOW() - INTERVAL '2 hours'`
+- **PostGIS:** Usar extensión para consultas de proximidad (`ST_DWithin` para encontrar lugares cercanos al usuario). Integrar con Hibernate Spatial
+- **Soft delete:** Los lugares se desactivan (`activo = false`), nunca se eliminan. Implementar con `@Where(clause = "activo = true")` en Hibernate
+- **Auditoría:** Usar `@CreatedDate` y `@LastModifiedDate` de Spring Data JPA para `created_at` y `updated_at`

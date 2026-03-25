@@ -1,41 +1,50 @@
 # Arquitectura y Stack Tecnológico: Red-Nómada MVP
 
 ## Visión General
-App mobile-first para profesionales itinerantes que evalúan espacios de trabajo según 3 pilares técnicos (Conectividad, Energía, Ambiente). Diseñada para funcionar con conectividad intermitente y bajo consumo de batería.
+App móvil nativa para profesionales itinerantes que evalúan espacios de trabajo según 3 pilares técnicos (Conectividad, Energía, Ambiente). Diseñada para funcionar con conectividad intermitente y bajo consumo de batería.
 
 ---
 
-## Frontend (Mobile-First PWA)
+## Frontend (App Móvil Nativa)
 
-- **Framework:** React 18+ con Vite
-- **Styling:** TailwindCSS 3.x (utility-first, rápido para prototipos y consistente con diseño mobile)
-- **State Management:** Zustand (ligero, sin boilerplate)
-- **Routing:** React Router v6
-- **PWA:** Workbox (Service Workers para cache offline)
-- **Mapas:** Leaflet + OpenStreetMap (gratuito, sin dependencia de API keys de Google)
-- **Geolocalización:** API nativa del navegador (`navigator.geolocation`) con permisos granulares
+- **Framework:** React Native 0.76+ con Expo SDK 52+
+- **Styling:** NativeWind v4 (TailwindCSS para React Native)
+- **State Management:** Zustand (ligero, sin boilerplate, compatible RN)
+- **Navegación:** Expo Router (file-based routing)
+- **Almacenamiento local:** expo-secure-store (tokens), AsyncStorage (cache general)
+- **Mapas:** react-native-maps (MapView nativo iOS/Android)
+- **Geolocalización:** expo-location (permisos granulares nativos)
+- **Networking:** Axios con interceptors para auth
+- **Offline:** @react-native-community/netinfo + AsyncStorage para cola de reportes pendientes
 
-### Justificación PWA
-- Instalable en dispositivos sin pasar por App Store
-- Cache offline nativo vía Service Workers
-- Menor consumo de batería vs. apps nativas con GPS en background
-- Un solo codebase para web + mobile
+### Justificación React Native + Expo
+- Acceso nativo a GPS, permisos, notificaciones locales
+- Performance nativo en animaciones del Snapshot (< 5s)
+- Un solo codebase para iOS + Android
+- Expo simplifica builds, OTA updates, y gestión de permisos
+- NativeWind permite reusar conocimiento de TailwindCSS
 
 ---
 
 ## Backend (API REST)
 
-- **Runtime:** Node.js 20 LTS
-- **Framework:** Express.js 4.x
-- **ORM:** Prisma (type-safe, migraciones automáticas)
-- **Validación:** Zod (schemas compartidos con frontend)
-- **Autenticación:** JWT (access + refresh tokens)
-- **Rate Limiting:** express-rate-limit
+- **Runtime:** Java 21 LTS
+- **Framework:** Spring Boot 3.x
+- **Seguridad:** Spring Security 6.x (JWT filter chain)
+- **ORM:** Spring Data JPA + Hibernate
+- **Migraciones:** Flyway
+- **Validación:** Bean Validation (Jakarta `@Valid`, `@NotNull`, `@Pattern`)
+- **Autenticación:** JWT (access + refresh tokens) con `jjwt` (io.jsonwebtoken)
+- **Rate Limiting:** Bucket4j o Spring Cloud Gateway rate limiter
+- **Build:** Gradle 8.x con Kotlin DSL
+- **Documentación API:** SpringDoc OpenAPI (Swagger UI)
 
-### Justificación Node.js
-- Ecosistema JavaScript unificado (frontend + backend)
-- Excelente para I/O asíncrono (reportes en tiempo real)
-- Comunidad amplia, iteración rápida para MVP
+### Justificación Java + Spring Boot
+- Ecosistema maduro y robusto para APIs REST
+- Spring Security integrado (JWT, roles, CORS, CSRF)
+- Tipado fuerte reduce bugs en reglas de negocio complejas
+- Hibernate + Flyway para migraciones controladas
+- Alto rendimiento bajo carga con pool de threads virtual (Java 21)
 
 ---
 
@@ -55,10 +64,13 @@ App mobile-first para profesionales itinerantes que evalúan espacios de trabajo
 - **Containerización:** Docker + Docker Compose (dev local)
 - **CI/CD:** GitHub Actions
 - **Hosting (MVP):**
-  - Frontend: Vercel (CDN global, gratis para PWA)
   - Backend: Railway o Render (free tier para MVP)
   - PostgreSQL: Neon (serverless PostgreSQL, free tier)
   - Redis: Upstash (serverless Redis, free tier)
+- **App Distribution:**
+  - Expo EAS Build (builds en la nube)
+  - Expo EAS Submit (publicación App Store / Google Play)
+  - Expo EAS Update (OTA updates sin rebuild)
 
 ---
 
@@ -67,28 +79,37 @@ App mobile-first para profesionales itinerantes que evalúan espacios de trabajo
 ```
 red-nomada/
 ├── Docs/
-│   └── specs/              # Documentación SDD
+│   └── specs/                  # Documentación SDD
 ├── apps/
-│   ├── web/                # Frontend React PWA
-│   │   ├── src/
-│   │   │   ├── components/ # Componentes UI reutilizables
-│   │   │   ├── features/   # Módulos por feature (snapshot, verification, gamification)
-│   │   │   ├── hooks/      # Custom hooks (geolocation, permissions)
-│   │   │   ├── services/   # API client, cache, offline
-│   │   │   ├── stores/     # Zustand stores
-│   │   │   └── utils/      # Helpers, constantes de pilares
-│   │   └── public/
-│   └── api/                # Backend Express
-│       ├── src/
-│       │   ├── routes/     # Endpoints REST
-│       │   ├── controllers/
-│       │   ├── services/   # Lógica de negocio
-│       │   ├── middleware/ # Auth, rate-limit, validation
-│       │   ├── prisma/     # Schema y migraciones
-│       │   └── utils/      # Helpers, constantes
-│       └── tests/
-└── packages/
-    └── shared/             # Tipos y schemas Zod compartidos
+│   ├── mobile/                 # Frontend React Native + Expo
+│   │   ├── app/                # Expo Router (file-based routes)
+│   │   │   ├── (tabs)/         # Tab navigation (mapa, misiones, perfil)
+│   │   │   ├── lugar/[id].tsx  # Detalle lugar + Snapshot
+│   │   │   └── auth/           # Login, Registro
+│   │   ├── components/         # Componentes UI reutilizables
+│   │   ├── features/           # Módulos por feature (snapshot, verification, gamification)
+│   │   ├── hooks/              # Custom hooks (useLocation, usePermissions)
+│   │   ├── services/           # API client, auth, offline queue
+│   │   ├── stores/             # Zustand stores
+│   │   ├── utils/              # Helpers, constantes de pilares
+│   │   └── assets/             # Iconos, fuentes, imágenes
+│   └── api/                    # Backend Spring Boot
+│       └── src/
+│           ├── main/
+│           │   ├── java/com/rednomada/
+│           │   │   ├── config/         # SecurityConfig, CorsConfig, RedisConfig
+│           │   │   ├── controller/     # REST Controllers
+│           │   │   ├── service/        # Lógica de negocio
+│           │   │   ├── repository/     # Spring Data JPA Repositories
+│           │   │   ├── model/          # Entidades JPA (@Entity)
+│           │   │   ├── dto/            # DTOs de request/response
+│           │   │   ├── security/       # JWT filter, AuthEntryPoint
+│           │   │   ├── exception/      # GlobalExceptionHandler, custom exceptions
+│           │   │   └── util/           # Helpers, constantes
+│           │   └── resources/
+│           │       ├── application.yml # Configuración Spring
+│           │       └── db/migration/   # Scripts Flyway
+│           └── test/                   # Tests unitarios e integración
 ```
 
 ---
@@ -97,9 +118,12 @@ red-nomada/
 
 | Decisión | Elección | Alternativa descartada | Razón |
 |---|---|---|---|
-| App type | PWA | React Native | Un codebase, offline nativo, sin App Store |
-| Backend | Node.js/Express | Python/FastAPI | JS unificado, velocidad de iteración |
+| App type | React Native + Expo | PWA | Acceso nativo a GPS, permisos, mejor UX móvil |
+| Styling | NativeWind | StyleSheet puro | Productividad, consistencia con Tailwind |
+| Backend | Java/Spring Boot | Node.js/Express | Tipado fuerte, Spring Security integrado, robustez |
+| ORM | JPA/Hibernate | JDBC puro | Productividad, migraciones con Flyway |
 | DB | PostgreSQL | MongoDB | Datos relacionales, PostGIS, integridad |
 | Cache/TTL | Redis | In-memory | TTL nativo para expiración de 2h |
-| Mapas | Leaflet/OSM | Google Maps | Gratuito, sin API key, offline tiles |
+| Mapas | react-native-maps | Leaflet | Componente nativo para RN, mejor performance |
 | State | Zustand | Redux | Menos boilerplate, más simple para MVP |
+| Navegación | Expo Router | React Navigation directo | File-based routing, deep linking automático |
