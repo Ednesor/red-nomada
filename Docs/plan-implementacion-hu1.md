@@ -64,19 +64,22 @@ Archivos a crear:
 ```
 apps/api/src/main/java/com/rednomada/
 ├── model/
-│   ├── Lugar.java          ← @Entity, campos: id(UUID), nombre, direccion, latitud(DECIMAL), longitud(DECIMAL), categoria(enum), activo(boolean), created_at, updated_at
+│   ├── Usuario.java        ← @Entity, requerido FK de Reporte. Campos: id, email, nombre, password_hash, rol, puntos_totales, permiso_ubicacion (SE IMPLEMENTA EN HU2, crear con default NINGUNO)
+│   ├── Lugar.java          ← @Entity + @Where(clause = "activo = true"), campos: id(UUID), nombre, direccion, latitud(DECIMAL), longitud(DECIMAL), categoria(enum), activo(boolean), created_at, updated_at
 │   ├── Reporte.java        ← @Entity, campos: id(UUID), usuario_id(FK), lugar_id(FK), conectividad(enum), energia(enum), ambiente(enum), created_at
 │   └── enums/
 │       ├── CategoriaLugar.java      ← CAFE, COWORKING, BIBLIOTECA, OTRO
-│       ├── NivelConectividad.java   ← BAJA, MEDIA, ALTA
-│       ├── NivelEnergia.java        ← POCOS, SUFICIENTES, MUCHOS
-│       └── NivelAmbiente.java       ← SILENCIOSO, MODERADO, RUIDOSO
+│       ├── Conectividad.java        ← BAJA, MEDIA, ALTA (coincide con modelo_datos.md)
+│       ├── Energia.java             ← POCOS, SUFICIENTES, MUCHOS (coincide con modelo_datos.md)
+│       └── Ambiente.java            ← SILENCIOSO, MODERADO, RUIDOSO (coincide con modelo_datos.md)
 ```
+
+> **Nota:** Aunque HU1 no crea reportes, la entidad Usuario es REQUERIDA porque Reporte tiene FK a Usuario. Se crea con lógica básica; el campo `permiso_ubicacion` completo se implementa en HU2.
 
 **Reglas clave en Reporte:**
 
 - Índice compuesto `(lugar_id, created_at DESC)` para query rápida del reporte más reciente
-- Restricción: 1 reporte por usuario por lugar cada 30 minutos (se valida en service layer)
+- **Anti-spam 30 min:** Restricción a nivel Service Layer — validar antes de crear reporte (se implementa en HU2, preparar lógica desde ya)
 
 ### Paso 1.2: Migraciones Flyway
 
@@ -99,8 +102,10 @@ Archivos a crear:
 ```
 apps/api/src/main/java/com/rednomada/
 └── repository/
-    ├── LugarRepository.java     ← findByActivoTrue() + query geoespacial (PostGIS o lat/lng bounding box)
+    ├── LugarRepository.java     ← findByActivoTrue() + query geoespacial
     └── ReporteRepository.java   ← findLatestByLugarId() + countByLugarIdAndCreatedAtAfter()
+
+> **Estrategia de búsqueda geográfica:** Para MVP se usa Haversine en service layer (PostGIS no disponible en Neon free tier). Las queries usan bounding box con lat/lng para filtrado inicial.
 ```
 
 ### Paso 1.4: DTOs del Snapshot
@@ -329,10 +334,10 @@ Fase 0 (Bootstrap)     →  Fase 1 (Backend)           →  Fase 2 (Frontend)   
 | Fase | Archivos nuevos | Archivos modificados |
 |------|----------------|---------------------|
 | 0 - Bootstrap | 6 | 0 |
-| 1 - Backend | ~15 | 0 |
+| 1 - Backend | ~16 (+ Usuario.java) | 0 |
 | 2 - Frontend | ~20 | 0 |
 | 3 - Integración | 1 | 0 |
-| **Total** | **~42** | **0** |
+| **Total** | **~43** | **0** |
 
 ---
 
@@ -357,11 +362,20 @@ Fase 0 (Bootstrap)     →  Fase 1 (Backend)           →  Fase 2 (Frontend)   
 
 ---
 
+## Decisiones Arquitectónicas Documentadas
+
+| Decisión | Detalle | Justificación |
+|----------|---------|---------------|
+| Búsqueda geográfica | Haversine en service layer (no PostGIS) | Neon free tier no tiene PostGIS — funcional para MVP |
+| FK Usuario en Reporte | Entidad Usuario requerida en HU1 | La FK de Reporte → Usuario necesita existir aunque sea mínima |
+| Permisos ubicación | Campo existe pero sin lógica activa en HU1 | Se implementa en HU2 según `reglas_negocio.md` |
+| Anti-spam 30 min | Lógica preparada en repository | Se valida en service layer cuando se implemente POST reportes (HU2) |
+
 ## Riesgos Identificados
 
 | Riesgo | Impacto | Mitigación |
 |--------|---------|------------|
-| PostGIS no disponible en Neon free tier | Medio | Usar bounding box con lat/lng en queries nativas (Haversine en service layer) — funcional para MVP |
+| PostGIS no disponible en Neon free tier | Medio | Haversine en service layer — funcional para MVP |
 | Google Maps API key para Android | Bajo | Usar Apple Maps en iOS (nativo), pedir key de Google solo si se necesita Android |
 | Seed de lugares insuficiente | Bajo | Incluir 10-15 lugares reales de CABA en la migración V4 |
 
@@ -375,3 +389,16 @@ Fase 0 (Bootstrap)     →  Fase 1 (Backend)           →  Fase 2 (Frontend)   
 - ✅ Snapshot visible en pantalla de detalle `/lugar/[id]`
 - ✅ Indicador de frescura en marcadores del mapa
 - ✅ Filtros por categoría funcionales
+
+---
+
+## Historial de Versiones
+
+### v1.1 (2026-03-29) - Correcciones aplicadas
+- ✅ Agregada entidad `Usuario.java` (FK requerida por Reporte)
+- ✅ Enums renombrados: `Conectividad.java`, `Energia.java`, `Ambiente.java` — coinciden con `modelo_datos.md`
+- ✅ Agregada nota de estrategia geográfica (Haversine vs PostGIS)
+- ✅ Agregada sección de decisiones arquitectónicas documentadas
+- ✅ Campo `activo` en `Lugar.java` usa `@Where(clause = "activo = true")`
+- ✅ Anti-spam 30 min marcado como "preparado para HU2"
+- Total archivos backend: ~16 (+1 usuario)
