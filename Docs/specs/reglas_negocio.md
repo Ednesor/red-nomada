@@ -44,6 +44,13 @@
 - Si un nuevo reporte contradice al anterior (ej: de `SILENCIOSO` a `RUIDOSO`), el nuevo reporte **reemplaza** al anterior como estado actual
 - Se conserva el historial completo para análisis
 
+### Equidad en Solicitudes de Validación
+- Las alertas de re-validación deben distribuirse **equitativamente** entre usuarios
+- **Algoritmo:** Se prioriza a usuarios con permisos `SIEMPRE` o `SOLO_EN_USO`
+- **Límite:** Máximo **3-5 validaciones por usuario por día** (evitar spam y agotamiento)
+- **Round-robin:** Distribuir solicitudes equitativamente para evitar sesgo hacia usuarios activos
+- **Implicación:** Garantiza escalabilidad comunitaria sin agotar a los usuarios más activos
+
 ---
 
 ## 4. Gestión de Ubicación y Permisos
