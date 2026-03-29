@@ -64,9 +64,13 @@
 
 ### Misiones
 - Retos diarios con objetivos concretos (ej: "Reportá 3 cafés hoy")
+- Tipos de misiones (según enum `Mision.tipo`):
+  - **REPORTAR:** completar N reportes en el día (ej: "Reportá 3 cafés hoy")
+  - **VALIDAR:** confirmar reportes de otros usuarios (vinculado a métrica de impacto social de HU3)
+  - **PRIMERO_EN_REPORTAR:** bonus por ser el primero en reportar un lugar
 - Bonus por acciones de alto valor:
   - **"Primer reporte"** de un lugar: puntos extra
-  - **"Confirmar lugar lleno/vacío"**: puntos de verificación
+  - **"Confirmar lugar lleno"**: puntos de verificación
 - Las misiones se resetean diariamente a las **00:00 hora local** del usuario
 
 ### Insignias

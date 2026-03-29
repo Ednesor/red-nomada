@@ -77,3 +77,4 @@ Cada propuesta debe verificarse contra:
 - ✅ Restricciones técnicas de Red-Nómada
 - ✅ Consistencia con documentación existente en `docs/`
 - ✅ Sin funcionalidades adicionales no solicitadas ("gold plating")
+- ❌ Prohibido sugerir cambios al stack tecnológico definido en arquitectura_stack.md
